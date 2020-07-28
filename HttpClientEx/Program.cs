@@ -63,7 +63,7 @@ namespace HttpClientEx
             List<SolicitudDto> ListaSolicitudes = GetLista(url);
             #endregion
 
-            #region [Prueba GetListaFiltrada]
+            #region [Pruebas Filtros]
 
             //  Validar que la lista de solicitudes no este vacia.
             if(ListaSolicitudes.Count != 0)
