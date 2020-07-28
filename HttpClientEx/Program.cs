@@ -26,10 +26,13 @@ namespace HttpClientEx
             string url4 = "https://localhost:44323/api/v1/filtrossolicitudes";
             string url5 = "https://localhost:44323/api/v1/filtrossolicitudes/filtrarfallecidos";
             string url6 = "https://localhost:44323/api/v1/filtrossolicitudes/filtrarSaldoCero";
+            string url7 = "https://localhost:44323/api/v1/filtrossolicitudes/inserthistoriasolicitud";
+
             #endregion
 
             #region [Prueba GetEstado]
-            //string result = GetEstado(url);
+            /*string estado = GetEstado(url1);
+            string fecha = GetFechaContable(url2,1);*/
             #endregion
 
             #region [Prueba GetFechaContable]
@@ -66,7 +69,7 @@ namespace HttpClientEx
             #region [Pruebas Filtros]
 
             //  Validar que la lista de solicitudes no este vacia.
-            if(ListaSolicitudes.Count != 0)
+            if (ListaSolicitudes.Count != 0)
             {
                 var existeFallecido = false;
                 var countFallecidos = 0;
@@ -86,7 +89,7 @@ namespace HttpClientEx
                     var mensaje = countFallecidos > 1 ? $"Se han encontrado {countFallecidos} clientes fallecidos." : "Se ha encontrado un cliente fallecido.";
                     Console.WriteLine(mensaje);
                     Console.WriteLine("Filtrando las solicitudes de clientes fallecidos de la lista . . .");
-                    
+
                     // Contenido de la request
                     string reqValues = JsonConvert.SerializeObject(ListaSolicitudes);
                     var reqContent = new StringContent(reqValues, Encoding.UTF8, "application/json");
@@ -97,8 +100,6 @@ namespace HttpClientEx
                 foreach (var solicitud in ListaSolicitudes)
                 {
                     int count = 0;
-                    
-                    SolicitudDto SolicitudSaldosCero = new SolicitudDto();
                     foreach (var ObjDetalle in solicitud.Saldos)
                     {
                         if (ObjDetalle.SaldoCuota == "0") count++;
@@ -122,12 +123,24 @@ namespace HttpClientEx
                     var reqContent = new StringContent(reqValues, Encoding.UTF8, "application/json");
                     ListaSolicitudes = FiltrarSaldosCero(url6, usuario, reqContent);
                 }
+                if (ListaSolicitudes.Count != 0)
+                {
+                    //  Parametros
+                    int TipoProceso = 1, Imputacion = 1;
+                    string FechaMaterializacion = DateTime.Today.ToString("dd-MM-yyyy");
+                    var reqValues = JsonConvert.SerializeObject(ListaSolicitudes);
+                    var reqContent = new StringContent(reqValues, Encoding.UTF8, "application/json");
+                    //  Llamada
+                    Console.WriteLine($"insertando solicitudes en la tabla . . .");
+                    string result = InsertSolicitudesImputacion(url7, TipoProceso, FechaMaterializacion, Imputacion, usuario, reqContent);
+                }
             }
             else
             {
                 Console.WriteLine("No se pudo obtener la lista de solucitudes...");
             }
             #endregion
+
         }
 
         public static string GetEstado(string url)
@@ -142,15 +155,15 @@ namespace HttpClientEx
             {
                 result = sr.ReadToEnd().Trim();
             }
-            JObject o = JObject.Parse("{\"nombre\":\"siri\"}");
-            string name = (string)o.SelectToken("nombre");
-
+            JObject obj = JObject.Parse(result);
+            int estado = obj.SelectToken("estadoImputador").ToObject<int>();
+            result = estado.ToString();
             return result;
         }
-        public static string GetFechaContable(string url)
+        public static string GetFechaContable(string url, int tipoFecha)
         {
             string result = "";
-            WebRequest request = WebRequest.Create(url);
+            WebRequest request = WebRequest.Create($"{url}/{tipoFecha}");
             request.Method = "get";
             request.ContentType = "application/json;charset=UTF-8";
 
@@ -159,8 +172,9 @@ namespace HttpClientEx
             {
                 result = sr.ReadToEnd().Trim();
             }
-            JObject o = JObject.Parse(result);
-            string fechaContable = o.SelectToken("fechaContable").ToString();
+            //JObject o = JObject.Parse(result);
+            JObject obj = JsonConvert.DeserializeObject<JObject>(result);
+            string fechaContable = obj.SelectToken("fechaContable").ToString();
 
             return fechaContable;
         }
@@ -278,6 +292,40 @@ namespace HttpClientEx
                 }
             }
         }
+
+        public static string InsertSolicitudesImputacion(string url, int TipoProceso, string Fmaterializacion, int Imputacion, string Usuario, StringContent content)
+        {
+            using (HttpClient client = new HttpClient())
+            {
+                using (HttpResponseMessage res = client.PostAsync($"{url}/{TipoProceso}/{Fmaterializacion}/{Imputacion}/{Usuario}", content).Result)
+                {
+                    try
+                    {
+                        var resData = "";
+                        HttpContent resContent = res.Content;
+                        if (res.IsSuccessStatusCode)
+                        {
+                            res.EnsureSuccessStatusCode();
+                            resData = resContent.ReadAsStringAsync().Result;
+                            Console.WriteLine($"{resData}\n");
+
+                        }
+                        else
+                        {
+                            resData = resContent.ReadAsStringAsync().Result;
+                            Console.WriteLine($"Error [{res.StatusCode}] al recibir la respuesta");
+                            Console.WriteLine($"Mensaje: {resData}{{0}}", Environment.NewLine);
+                        }
+                        return resData;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Se ha producido una excepcion al recibir la respuesta:{ex}, {ex.Message}");
+                        throw;
+                    }
+                }
+            }
+        }
     }
     public class Filtros
     {
@@ -293,6 +341,7 @@ namespace HttpClientEx
         public int Retorno { get; set; }
     }
 
+    #region [Clases para la solicitud]
     public class SolicitudDto
     {
         //Propiedades
@@ -347,4 +396,5 @@ namespace HttpClientEx
         public string SaldoUtm { get; set; }
         public string SaldoUf { get; set; }
     }
+    #endregion
 }
